@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Xe Tiện Chuyến Miễn Phí</title>
+    <!-- Chèn font chữ và icon cho đẹp giống app xịn -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        .header {
+            background: linear-gradient(135deg, #0288d1, #0056b3);
+            color: white;
+            text-align: center;
+            padding: 30px 20px;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .header p {
+            margin: 5px 0 0 0;
+            opacity: 0.9;
+            font-size: 14px;
+        }
+        .container {
+            max-width: 600px;
+            margin: -20px auto 20px auto;
+            padding: 0 15px;
+        }
+        .search-box {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+        }
+        .search-box i {
+            color: #888;
+            margin-right: 10px;
+            font-size: 18px;
+        }
+        .search-box input {
+            border: none;
+            outline: none;
+            width: 100%;
+            font-size: 16px;
+        }
+        .loading {
+            text-align: center;
+            margin-top: 30px;
+            font-size: 16px;
+            color: #666;
+        }
+        .chuyen-xe-list {
+            margin-top: 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border-left: 5px solid #28a745;
+        }
+        .tuyen-duong {
+            font-size: 18px;
+            font-weight: bold;
+            color: #0056b3;
+            margin-bottom: 8px;
+        }
+        .info-row {
+            display: flex;
+            margin-bottom: 5px;
+            font-size: 14px;
+            align-items: center;
+        }
+        .info-row i {
+            width: 20px;
+            color: #666;
+            margin-right: 8px;
+        }
+        .btn-call {
+            display: block;
+            background-color: #28a745;
+            color: white;
+            text-align: center;
+            padding: 10px;
+            border-radius: 5px;
+            text-decoration: none;
+            font-weight: bold;
+            margin-top: 12px;
+            transition: 0.3s;
+        }
+        .btn-call:hover {
+            background-color: #218838;
+        }
+        .no-result {
+            text-align: center;
+            color: #999;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>HỆ THỐNG XE TIỆN CHUYẾN</h1>
+        <p>Tìm kiếm chuyến đi tiết kiệm, nhanh chóng</p>
+    </div>
+
+    <div class="container">
+        <!-- Thanh Tìm Kiếm -->
+        <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="searchInput" oninput="timKiemChuyen()" placeholder="Nhập nơi đi hoặc nơi đến (VD: Hồ Chí Minh)...">
+        </div>
+
+        <!-- Trạng thái đang tải dữ liệu -->
+        <div id="loadingStatus" class="loading">
+            <i class="fa-solid fa-spinner fa-spin"></i> Đang tải danh sách chuyến xe...
+        </div>
+
+        <!-- Danh sách chuyến xe hiện ra ở đây -->
+        <div id="chuyenXeList" class="chuyen-xe-list"></div>
+    </div>
+
+    <script>
+        // DÁN ĐƯỜNG LINK GOOGLE APPS SCRIPT CỦA ANH VÀO ĐÂY
+        const URL_API = "https://script.google.com/macros/s/AKfycbzMeFj4A2E8b9It8kCmuDZV-t24SIqXCbHOpJ5VrvuVCallSjgw-PG6-VXprnPa-pfU/exec";
+        
+        let danhSachChuyen = [];
+
+        // Hàm tự động chạy để lấy dữ liệu khi mở Web
+        async function taiDuLieu() {
+            try {
+                const response = await fetch(URL_API);
+                danhSachChuyen = await response.json();
+                document.getElementById('loadingStatus').style.display = 'none';
+                hienThiChuyenXe(danhSachChuyen);
+            } catch (error) {
+                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi tải dữ liệu. Anh vui lòng kiểm tra lại cấu hình phân quyền công khai 'Anyone' trên Apps Script nhé!</span>";
+                console.error(error);
+            }
+        }
+
+        // Hàm hiển thị dữ liệu ra màn hình
+        function hienThiChuyenXe(data) {
+            const listContainer = document.getElementById('chuyenXeList');
+            listContainer.innerHTML = '';
+
+            if (data.length === 0) {
+                listContainer.innerHTML = '<div class="no-result">Không tìm thấy chuyến xe nào phù hợp.</div>';
+                return;
+            }
+
+            data.forEach(chuyen => {
+                // Định dạng hiển thị ngày giờ cho đẹp nếu có dữ liệu
+                let tg = chuyen.thoiGian ? new Date(chuyen.thoiGian).toLocaleString('vi-VN') : 'Chưa rõ thời gian';
+                if(tg === 'Invalid Date') tg = chuyen.thoiGian;
+
+                const card = `
+                    <div class="card">
+                        <div class="tuyen-duong"><i class="fa-solid fa-route"></i> ${chuyen.tuyenDuong || 'Chưa cập nhật tuyến'}</div>
+                        <div class="info-row"><i class="fa-solid fa-clock"></i> <b>Khởi hành:</b> &nbsp;${tg}</div>
+                        <div class="info-row"><i class="fa-solid fa-user"></i> <b>Tài xế:</b> &nbsp;${chuyen.tenTaiXe || 'Ẩn danh'}</div>
+                        <div class="info-row"><i class="fa-solid fa-car"></i> <b>Loại xe:</b> &nbsp;${chuyen.loaiXe || 'Chưa rõ'}</div>
+                        <div class="info-row"><i class="fa-solid fa-money-bill-wave"></i> <b>Giá vé:</b> &nbsp;<span style="color:#d32f2f; font-weight:bold;">${chuyen.giaVe || 'Thỏa thuận'}</span></div>
+                        <div class="info-row"><i class="fa-solid fa-comment"></i> <b>Ghi chú:</b> &nbsp;${chuyen.ghiChu || 'Không có'}</div>
+                        <a href="tel:${chuyen.sdt}" class="btn-call"><i class="fa-solid fa-phone"></i> Gọi Ngay: ${chuyen.sdt || 'Không có số'}</a>
+                    </div>
+                `;
+                listContainer.insertAdjacentHTML('beforeend', card);
+            });
+        }
+
+        // Hàm lọc tìm kiếm khi gõ chữ (Ví dụ: Hồ Chí Minh)
+        function timKiemChuyen() {
+            const tuKhoa = document.getElementById('searchInput').value.toLowerCase().trim();
+            if (!tuKhoa) {
+                hienThiChuyenXe(danhSachChuyen);
+                return;
+            }
+
+            const ketQuaLoc = danhSachChuyen.filter(chuyen => {
+                const tuyen = (chuyen.tuyenDuong || '').toLowerCase();
+                const taiXe = (chuyen.tenTaiXe || '').toLowerCase();
+                return tuyen.includes(tuKhoa) || taiXe.includes(tuKhoa);
+            });
+
+            hienThiChuyenXe(ketQuaLoc);
+        }
+
+        // Kích hoạt tải dữ liệu ngay khi mở trang
+        taiDuLieu();
+    </script>
+</body>
+</html>
