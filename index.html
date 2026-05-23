@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hệ Thống Xe Tiện Chuyến Miễn Phí</title>
-    <!-- Chèn font chữ và icon cho đẹp giống app xịn -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -53,7 +52,7 @@
             border: none;
             outline: none;
             width: 100%;
-            font-size: 16px;
+            font-size: 15px;
         }
         .loading {
             text-align: center;
@@ -119,41 +118,48 @@
     </div>
 
     <div class="container">
-        <!-- Thanh Tìm Kiếm -->
         <div class="search-box">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" id="searchInput" oninput="timKiemChuyen()" placeholder="Nhập nơi đi hoặc nơi đến (VD: Hồ Chí Minh)...">
+            <!-- Đã cập nhật bỏ chữ Quận/Huyện đúng theo thực tế thay đổi địa giới của anh -->
+            <input type="text" id="searchInput" oninput="timKiemChuyen()" placeholder="Nhập Phường/Xã, Tỉnh/TP, Tên tài xế (VD: Long Bình, Cần Thơ)...">
         </div>
 
-        <!-- Trạng thái đang tải dữ liệu -->
         <div id="loadingStatus" class="loading">
             <i class="fa-solid fa-spinner fa-spin"></i> Đang tải danh sách chuyến xe...
         </div>
 
-        <!-- Danh sách chuyến xe hiện ra ở đây -->
         <div id="chuyenXeList" class="chuyen-xe-list"></div>
     </div>
 
     <script>
-        // DÁN ĐƯỜNG LINK GOOGLE APPS SCRIPT CỦA ANH VÀO ĐÂY
         const URL_API = "https://script.google.com/macros/s/AKfycbzMeFj4A2E8b9It8kCmuDZV-t24SIqXCbHOpJ5VrvuVCallSjgw-PG6-VXprnPa-pfU/exec";
         
         let danhSachChuyen = [];
 
-        // Hàm tự động chạy để lấy dữ liệu khi mở Web
         async function taiDuLieu() {
             try {
                 const response = await fetch(URL_API);
-                danhSachChuyen = await response.json();
+                const rawData = await response.json();
+                
+                danhSachChuyen = rawData.map(item => ({
+                    thoiGian: item.thoiGian,                    
+                    tuyenDuong: item.tuyenDuong,                
+                    loaiPhuongTien: item.tenTaiXe,              
+                    tenTaiXe: item.sdt,                         
+                    sdt: item.loaiXe,                           
+                    chiTietXe: item.giaVe,                      
+                    giaVe: item.ghiChu,                         
+                    ghiChu: item.chiTietXe                      
+                }));
+
                 document.getElementById('loadingStatus').style.display = 'none';
                 hienThiChuyenXe(danhSachChuyen);
             } catch (error) {
-                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi tải dữ liệu. Anh vui lòng kiểm tra lại cấu hình phân quyền công khai 'Anyone' trên Apps Script nhé!</span>";
+                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi tải dữ liệu.</span>";
                 console.error(error);
             }
         }
 
-        // Hàm hiển thị dữ liệu ra màn hình
         function hienThiChuyenXe(data) {
             const listContainer = document.getElementById('chuyenXeList');
             listContainer.innerHTML = '';
@@ -164,18 +170,14 @@
             }
 
             data.forEach(chuyen => {
-                // Định dạng hiển thị ngày giờ cho đẹp nếu có dữ liệu
-                let tg = chuyen.thoiGian ? new Date(chuyen.thoiGian).toLocaleString('vi-VN') : 'Chưa rõ thời gian';
-                if(tg === 'Invalid Date') tg = chuyen.thoiGian;
-
                 const card = `
                     <div class="card">
-                        <div class="tuyen-duong"><i class="fa-solid fa-route"></i> ${chuyen.tuyenDuong || 'Chưa cập nhật tuyến'}</div>
-                        <div class="info-row"><i class="fa-solid fa-clock"></i> <b>Khởi hành:</b> &nbsp;${tg}</div>
+                        <div class="tuyen-duong"><i class="fa-solid fa-route"></i> ${chuyen.tuyenDuong || 'Chưa cập nhật'}</div>
+                        <div class="info-row"><i class="fa-solid fa-clock"></i> <b>Khởi hành:</b> &nbsp;${chuyen.thoiGian || 'Chưa rõ'}</div>
                         <div class="info-row"><i class="fa-solid fa-user"></i> <b>Tài xế:</b> &nbsp;${chuyen.tenTaiXe || 'Ẩn danh'}</div>
-                        <div class="info-row"><i class="fa-solid fa-car"></i> <b>Loại xe:</b> &nbsp;${chuyen.loaiXe || 'Chưa rõ'}</div>
-                        <div class="info-row"><i class="fa-solid fa-money-bill-wave"></i> <b>Giá vé:</b> &nbsp;<span style="color:#d32f2f; font-weight:bold;">${chuyen.giaVe || 'Thỏa thuận'}</span></div>
-                        <div class="info-row"><i class="fa-solid fa-comment"></i> <b>Ghi chú:</b> &nbsp;${chuyen.ghiChu || 'Không có'}</div>
+                        <div class="info-row"><i class="fa-solid fa-car"></i> <b>Loại xe:</b> &nbsp;${chuyen.loaiPhuongTien || 'Chưa rõ'}</div>
+                        <div class="info-row"><i class="fa-solid fa-id-card"></i> <b>Chi tiết/Biển số:</b> &nbsp;${chuyen.chiTietXe || 'Chưa rõ'}</div>
+                        <div class="info-row"><i class="fa-solid fa-money-bill-wave"></i> <b>Giá dự kiến:</b> &nbsp;<span style="color:#d32f2f; font-weight:bold;">${chuyen.giaVe || 'Thỏa thuận'}</span></div>
                         <a href="tel:${chuyen.sdt}" class="btn-call"><i class="fa-solid fa-phone"></i> Gọi Ngay: ${chuyen.sdt || 'Không có số'}</a>
                     </div>
                 `;
@@ -183,7 +185,6 @@
             });
         }
 
-        // Hàm lọc tìm kiếm khi gõ chữ (Ví dụ: Hồ Chí Minh)
         function timKiemChuyen() {
             const tuKhoa = document.getElementById('searchInput').value.toLowerCase().trim();
             if (!tuKhoa) {
@@ -194,13 +195,13 @@
             const ketQuaLoc = danhSachChuyen.filter(chuyen => {
                 const tuyen = (chuyen.tuyenDuong || '').toLowerCase();
                 const taiXe = (chuyen.tenTaiXe || '').toLowerCase();
-                return tuyen.includes(tuKhoa) || taiXe.includes(tuKhoa);
+                const loaiXe = (chuyen.loaiPhuongTien || '').toLowerCase();
+                return tuyen.includes(tuKhoa) || taiXe.includes(tuKhoa) || loaiXe.includes(tuKhoa);
             });
 
             hienThiChuyenXe(ketQuaLoc);
         }
 
-        // Kích hoạt tải dữ liệu ngay khi mở trang
         taiDuLieu();
     </script>
 </body>
