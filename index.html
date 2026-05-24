@@ -143,55 +143,64 @@
     </div>
 
     <script>
-        // Đường link API từ Google Apps Script của anh
+        // THAY ĐƯỜNG LINK WEB APP GOOGLE SCRIPT CỦA ANH VÀO ĐÂY
         const URL_API = "https://script.google.com/macros/s/AKfycbzMeFj4A2E8b9It8kCmuDZV-t24SIqXCbHOpJ5VrvuVCallSjgw-PG6-VXprnPa-pfU/exec";
         
         let danhSachChuyen = [];
 
-        // Hàm kiểm tra để tự động ẩn chuyến xe khi đã quá giờ khởi hành (Cột B)
-        function parseDateString(str) {
-            if (!str) return null;
-            // Hỗ trợ định dạng "HH:mm DD/MM/YYYY" hoặc hệ thống ngày giờ tiêu chuẩn từ Google Sheets
-            const match = str.trim().match(/^(\d{1,2}):(\d{1,2})\s+(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-            if (!match) {
-                // Nếu Google Sheets trả về dạng Date tiêu chuẩn ISO hoặc định dạng khác
-                const d = new Date(str);
-                return isNaN(d.getTime()) ? null : d;
+        // Hàm xử lý định dạng hiển thị ngày tháng / chuỗi chữ text thân thiện
+        function dinhDangHienThi(chuoiGoc) {
+            if (!chuoiGoc) return 'Chưa cập nhật';
+            if (chuoiGoc instanceof Date || !isNaN(Date.parse(chuoiGoc))) {
+                const d = new Date(chuoiGoc);
+                if (!isNaN(d.getTime())) {
+                    const ngay = String(d.getDate()).padStart(2, '0');
+                    const thang = String(d.getMonth() + 1).padStart(2, '0');
+                    const nam = d.getFullYear();
+                    return `${ngay}/${thang}/${nam}`;
+                }
             }
-            return new Date(match[5], match[4] - 1, match[3], match[1], match[2]);
+            // Nếu là chuỗi text sẵn (VD: 25/05/2026) thì giữ nguyên hiển thị
+            return String(chuoiGoc).trim();
         }
 
-        // Định dạng hiển thị ngày giờ thân thiện cho người dùng xem trên web
-        function dinhDangNgayGio(chuoiGoc) {
-            if (!chuoiGoc) return 'Chưa xác định';
-            const d = parseDateString(chuoiGoc);
-            if (!d) return chuoiGoc; // Nếu không parse được thì hiện chữ gốc
+        // Hàm chuyển đổi dữ liệu Ngày Khởi Hành sang đối tượng Ngày để so sánh ẩn chuyến cũ
+        function layNgaySoSanh(chuoiNgay) {
+            if (!chuoiNgay) return null;
             
-            const gio = String(d.getHours()).padStart(2, '0');
-            const phut = String(d.getMinutes()).padStart(2, '0');
-            const ngay = String(d.getDate()).padStart(2, '0');
-            const thang = String(d.getMonth() + 1).padStart(2, '0');
-            const nam = d.getFullYear();
-            
-            return `${gio}:${phut} ngày ${ngay}/${thang}/${nam}`;
+            // Nếu hệ thống tự parse được thành Date luôn
+            const d Direct = new Date(chuoiNgay);
+            if (!isNaN(dDirect.getTime())) {
+                dDirect.setHours(23, 59, 59, 999); // Giữ hiển thị hết ngày đó
+                return dDirect;
+            }
+
+            // Trường hợp chuỗi text thủ công dạng DD/MM/YYYY (VD: 25/05/2026)
+            const match = String(chuoiNgay).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (match) {
+                return new Date(match[3], match[2] - 1, match[1], 23, 59, 59);
+            }
+            return null;
         }
 
-        async function taiDu Lieu() {
+        async function taiDuLieu() {
             try {
                 const response = await fetch(URL_API);
                 const rawData = await response.json();
-                const bayGio = new Date();
                 
-                // Áp dụng bốc dữ liệu theo đúng chuẩn bảng mới (Cột A đến J)
+                // Đặt mốc thời gian hôm nay (bỏ phần giờ phút giây để chỉ so sánh ngày)
+                const homNay = new Date();
+                homNay.setHours(0, 0, 0, 0);
+                
                 const danhSachThoatLoc = rawData.map(item => {
-                    // Sửa lỗi tự động thêm số 0 cho số điện thoại ở Cột G
-                    let sdtChuan = String(item.soDienThoai || item.sdt || '').trim();
+                    // Tự động xử lý thêm số 0 ở đầu số điện thoại nếu bị thiếu
+                    let sdtChuan = String(item.soDienThoai || '').trim();
                     if (sdtChuan && !sdtChuan.startsWith('0') && !sdtChuan.startsWith('+')) {
                         sdtChuan = '0' + sdtChuan;
                     }
 
-                    // Sửa lỗi hiển thị đẹp cho giá tiền ở Cột I
-                    let giaGoc = item.giaDuKien || item.giaVe;
+                    // Tự động định dạng hiển thị giá tiền cho đẹp mắt
+                    let giaGoc = item.giaDuKien;
                     let giaHienThi = giaGoc;
                     if (giaGoc && !isNaN(giaGoc)) {
                         giaHienThi = Number(giaGoc).toLocaleString('vi-VN') + " vnđ";
@@ -200,30 +209,32 @@
                     }
 
                     return {
-                        thoiGianDang: item.thoiGianDangChuyen || item.thoiGianDang || 'Vừa xong', // Cột A
-                        thoiGianKhoiHanh: item.thoiGianKhoiHanh || item.thoiGian,               // Cột B
-                        tuyenDuong: item.tuyenDuong,                                           // Cột C
-                        loaiPhuongTien: item.loaiPhuongTien,                                   // Cột D
-                        bienSoXe: item.bienSoXe || item.chiTietXe,                             // Cột E
-                        tenTaiXe: item.tenTaiXe,                                               // Cột F
-                        sdt: sdtChuan,                                                         // Cột G
-                        chiTietXe: item.chiTietXe || item.chiTiet,                             // Cột H
-                        giaVe: giaHienThi,                                                     // Cột I
-                        ghiChu: item.ghiChu                                                    // Cột J
+                        thoiGianDang: dinhDangHienThi(item.thoiGianDangChuyen),
+                        thoiGianKhoiHanh: dinhDangHienThi(item.thoiGianKhoiHanh),
+                        tuyenDuong: item.tuyenDuong,
+                        loaiPhuongTien: item.loaiPhuongTien,
+                        bienSoXe: item.bienSoXe,
+                        tenTaiXe: item.tenTaiXe,
+                        sdt: sdtChuan,
+                        chiTietXe: item.chiTietXe,
+                        giaVe: giaHienThi,
+                        ghiChu: item.ghiChu
                     };
                 });
 
-                // LỌC TỰ ĐỘNG: Ẩn chuyến đã đi, chỉ giữ lại chuyến sắp đi (Cột B >= Hiện tại)
+                // TỰ ĐỘNG LỌC: Ẩn các chuyến xe đã chạy từ những ngày trước
                 danhSachChuyen = danhSachThoatLoc.filter(chuyen => {
-                    const thoiGianDi = parseDateString(chuyen.thoiGianKhoiHanh);
-                    if (!thoiGianDi) return true; // Nếu tài xế nhập chữ không đúng chuẩn ngày giờ thì cứ hiện lên
-                    return thoiGianDi >= bayGio;  // Chỉ lấy chuyến có thời gian khởi hành lớn hơn hoặc bằng hiện tại
+                    // Nếu ngày khởi hành >= ngày hôm nay thì giữ lại hiển thị lên web
+                    const ngayDi = layNgaySoSanh(item => item.thoiGianKhoiHanh ? item.thoiGianKhoiHanh : chuyen.thoiGianKhoiHanh);
+                    const thoiGianCheck = layNgaySoSanh(chuyen.thoiGianKhoiHanh);
+                    if (!thoiGianCheck) return true; // Nếu tài xế nhập chữ tự do thì vẫn cho hiện bài
+                    return thoiGianCheck >= homNay;
                 });
 
                 document.getElementById('loadingStatus').style.display = 'none';
                 hienThiChuyenXe(danhSachChuyen);
             } catch (error) {
-                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi kết nối dữ liệu Trang tính mới.</span>";
+                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi tải dữ liệu. Vui lòng kiểm tra lại cấu trúc nâng cấp Apps Script!</span>";
                 console.error(error);
             }
         }
@@ -233,24 +244,25 @@
             listContainer.innerHTML = '';
 
             if (data.length === 0) {
-                listContainer.innerHTML = '<div class="no-result">Hiện không có chuyến xe nào sắp khởi hành.</div>';
+                listContainer.innerHTML = '<div class="no-result">Hiện tại không có chuyến xe nào sắp chạy.</div>';
                 return;
             }
 
             data.forEach(chuyen => {
                 let khungGhiChu = '';
                 if (chuyen.ghiChu && String(chuyen.ghiChu).trim() !== '') {
-                    khungGhiChu = `<div class="ghi-chu-box"><i class="fa-solid fa-comment-dots"></i> <b>Ghi chú:</b> ${chuyen.ghiChu}</div>`;
+                    khungGhiChu = `<div class="ghi-chu-box"><i class="fa-solid fa-comment-dots"></i> <b>Giờ chạy/Ghi chú:</b> ${chuyen.ghiChu}</div>`;
                 }
 
                 const card = `
                     <div class="card">
                         <div class="tuyen-duong"><i class="fa-solid fa-route"></i> ${chuyen.tuyenDuong || 'Chưa cập nhật'}</div>
-                        <div class="info-row"><i class="fa-solid fa-clock"></i> <b>Khởi hành:</b> &nbsp;<span style="color:#0056b3; font-weight:500;">${dinhDangNgayGio(chuyen.thoiGianKhoiHanh)}</span></div>
-                        <div class="info-row"><i class="fa-solid fa-pen-to-square"></i> <b>Đăng lúc:</b> &nbsp;${dinhDangNgayGio(chuyen.thoiGianDang)}</div>
+                        <div class="info-row"><i class="fa-solid fa-calendar-days"></i> <b>Ngày chạy:</b> &nbsp;<span style="color:#0056b3; font-weight:bold;">${chuyen.thoiGianKhoiHanh}</span></div>
+                        <div class="info-row"><i class="fa-solid fa-pen-to-square"></i> <b>Đăng lúc:</b> &nbsp;${chuyen.thoiGianDang}</div>
                         <div class="info-row"><i class="fa-solid fa-user"></i> <b>Tài xế:</b> &nbsp;${chuyen.tenTaiXe || 'Ẩn danh'}</div>
-                        <div class="info-row"><i class="fa-solid fa-car"></i> <b>Loại xe:</b> &nbsp;${chuyen.loaiPhuongTien || 'Chưa rõ'} (${chuyen.chiTietXe || 'N/A'})</div>
-                        <div class="info-row"><i class="fa-solid fa-id-card"></i> <b>Biển số xe:</b> &nbsp;${chuyen.bienSoXe || 'Chưa cập nhật'}</div>
+                        <div class="info-row"><i class="fa-solid fa-car"></i> <b>Loại phương tiện:</b> &nbsp;${chuyen.loaiPhuongTien || 'Chưa rõ'}</div>
+                        <div class="info-row"><i class="fa-solid fa-circle-info"></i> <b>Chi tiết xe:</b> &nbsp;${chuyen.chiTietXe || 'Chưa rõ'}</div>
+                        <div class="info-row"><i class="fa-solid fa-id-card"></i> <b>Biển số xe:</b> &nbsp;${chuyen.bienSoXe || 'Chưa rõ'}</div>
                         <div class="info-row"><i class="fa-solid fa-money-bill-wave"></i> <b>Giá dự kiến:</b> &nbsp;<span style="color:#d32f2f; font-weight:bold;">${chuyen.giaVe}</span></div>
                         ${khungGhiChu}
                         <a href="tel:${chuyen.sdt}" class="btn-call"><i class="fa-solid fa-phone"></i> Gọi Tài Xế: ${chuyen.sdt}</a>
