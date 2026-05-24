@@ -52,7 +52,7 @@
             border: none;
             outline: none;
             width: 100%;
-            font-size: 13.5px; /* Tối ưu cỡ chữ vừa vặn để hiển thị câu hướng dẫn dài trên di động */
+            font-size: 13.5px;
         }
         .loading {
             text-align: center;
@@ -132,8 +132,8 @@
     <div class="container">
         <div class="search-box">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <!-- CẬP NHẬT CHÍNH XÁC DÒNG HƯỚNG DẪN DƯỚI ĐÂY -->
-            <input type="text" id="searchInput" oninput="timKiemChuyen()" placeholder="Nhập Phường/Xã, Quận/Huyện, Tỉnh/TP (Ví dụ: Long Mỹ, TP Cần Thơ, phường Sài Gòn, TP Hồ Chí Minh...)">
+            <!-- ĐÃ TINH CHỈNH ĐỂ KHÔNG BỊ TRÀN CHỮ MẤT CHỮ TRÊN MÀN HÌNH -->
+            <input type="text" id="searchInput" oninput="timKiemChuyen()" placeholder="Nhập Phường/Xã, Quận/Huyện, Tỉnh/TP (Ví dụ: Long Mỹ, TP Cần Thơ, P. Sài Gòn, TP HCM...)">
         </div>
 
         <div id="loadingStatus" class="loading">
