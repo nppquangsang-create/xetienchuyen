@@ -56,6 +56,32 @@
             width: 100%;
             font-size: 14px;
         }
+        /* Bộ lọc nhanh Ô tô / Xe máy */
+        .filter-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .btn-filter {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 500;
+            cursor: pointer;
+            background-color: #e0e0e0;
+            color: #444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            font-size: 14px;
+            transition: 0.2s;
+        }
+        .btn-filter.active {
+            background-color: #007bff;
+            color: white;
+        }
         .loading {
             text-align: center;
             margin-top: 30px;
@@ -72,17 +98,31 @@
             margin-bottom: 15px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             border-left: 5px solid #0288d1;
-            position: relative;
+        }
+        .tuyen-duong-box {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 1px dashed #eee;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
         }
         .tuyen-duong {
             font-size: 16px;
             font-weight: bold;
             color: #0056b3;
-            margin-bottom: 12px;
-            border-bottom: 1px dashed #eee;
-            padding-bottom: 8px;
-            padding-right: 5px;
+            padding-right: 10px;
         }
+        .badge-loai-xe {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 20px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        .badge-xe-may { background-color: #e3f2fd; color: #0d47a1; }
+        .badge-o-to { background-color: #e8f5e9; color: #1b5e20; }
+
         .info-row {
             display: flex;
             margin-bottom: 8px;
@@ -143,9 +183,17 @@
     </div>
 
     <div class="container">
+        <!-- Ô tìm kiếm chuẩn tư duy địa danh của anh -->
         <div class="search-box">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" id="searchInput" oninput="locChuyenXeDoiLuu()" placeholder="Nhập tỉnh thành, quận huyện để tìm tuyến đường...">
+            <input type="text" id="searchInput" oninput="locChuyenXeTổngHop()" placeholder="Nhập đúng phường/xã - tỉnh/ thành phố (Ví dụ: Cái Răng - Cần Thơ)...">
+        </div>
+
+        <!-- Bộ lọc nhanh loại phương tiện -->
+        <div class="filter-buttons">
+            <button class="btn-filter active" id="btnAll" onclick="thayDoiBoLocLoaiXe('TatCa')"><i class="fa-solid fa-list"></i> Tất cả</button>
+            <button class="btn-filter" id="btnOto" onclick="thayDoiBoLocLoaiXe('Ô tô')"><i class="fa-solid fa-car"></i> Ô tô</button>
+            <button class="btn-filter" id="btnXeMay" onclick="thayDoiBoLocLoaiXe('Xe máy')"><i class="fa-solid fa-motorcycle"></i> Xe máy</button>
         </div>
 
         <div id="loadingStatus" class="loading">
@@ -159,9 +207,10 @@
         const URL_API = "https://script.google.com/macros/s/AKfycbzMeFj4A2E8b9It8kCmuDZV-t24SIqXCbHOpJ5VrvuVCallSjgw-PG6-VXprnPa-pfU/exec";
         
         let danhSachChuyenGoc = [];
+        let loaiXeDuocChon = "TatCa";
 
-        // Hàm xử lý bóc tách định dạng thời gian thô (ISO String) từ Sheets về dạng chuẩn [Giờ trước - Ngày sau]
-        function formatFullDateTime(chuoiThoiGian) {
+        // Hàm bóc tách chuỗi thời gian thô từ Sheets đưa về định dạng [Giờ trước - Ngày sau]
+        function dinhDangThoiGianChuan(chuoiThoiGian) {
             if (!chuoiThoiGian) return 'Chưa cập nhật';
             const d = new Date(chuoiThoiGian);
             if (isNaN(d.getTime())) return String(chuoiThoiGian).trim();
@@ -182,15 +231,15 @@
                 
                 const thoiGianHienTai = new Date(); 
                 
-                // Áp đúng thứ tự cột thực tế trên file Sheets của anh (A đến J)
+                // Khớp chính xác 100% thứ tự cột A -> J từ file Google Sheets thực tế của anh
                 danhSachChuyenGoc = rawData.map(item => {
-                    // 1. Xử lý chuẩn hóa Số điện thoại luôn có số 0 ở đầu
+                    // Sửa lỗi mất số 0 của số điện thoại
                     let sdtChuan = String(item.soDienThoai || '').trim();
                     if (sdtChuan && !sdtChuan.startsWith('0') && !sdtChuan.startsWith('+')) {
                         sdtChuan = '0' + sdtChuan;
                     }
 
-                    // 2. Xử lý chuẩn hóa Định dạng tiền tệ dấu chấm phân cách
+                    // Sửa định dạng dấu chấm tiền tệ
                     let giaGoc = item.giaDuKien;
                     let giaHienThi = "";
                     if (giaGoc && !isNaN(giaGoc)) {
@@ -200,20 +249,20 @@
                     }
 
                     return {
-                        thoiGianDang: formatFullDateTime(item.thoiGianDangChuyen),     // Cột A
-                        thoiGianKhoiHanh: formatFullDateTime(item.thoiGianKhoiHanh), // Cột B
+                        thoiGianDang: dinhDangThoiGianChuan(item.thoiGianDangChuyen), // Cột A
+                        thoiGianKhoiHanh: dinhDangThoiGianChuan(item.thoiGianKhoiHanh), // Cột B
                         tuyenDuong: item.tuyenDuong,                                 // Cột C
-                        loaiPhuongTien: item.loaiPhuongTien,                         // Cột D
+                        loaiPhuongTien: String(item.loaiPhuongTien || '').trim(),    // Cột D (Ô tô / Xe máy cố định)
                         bienSoXe: item.bienSoXe,                                     // Cột E
                         tenTaiXe: item.tenTaiXe,                                     // Cột F
                         sdt: sdtChuan,                                               // Cột G
-                        chiTietXe: item.chiTietXe,                                   // Cột H
+                        chiTietXe: item.chiTietXe,                                   // Cột H (Hiệu xe, số chỗ tự nhập)
                         giaVe: giaHienThi,                                           // Cột I
                         ghiChu: item.ghiChu,                                         // Cột J
                         thoiGianKhoiHanhMoc: item.thoiGianKhoiHanh ? new Date(item.thoiGianKhoiHanh) : null
                     };
                 }).filter(chuyen => {
-                    // Cơ chế tự ẩn bài sau giờ chạy
+                    // Cơ chế tự động ẩn bài khi hết giờ chạy thực tế
                     if (!chuyen.thoiGianKhoiHanhMoc || isNaN(chuyen.thoiGianKhoiHanhMoc.getTime())) return true;
                     return chuyen.thoiGianKhoiHanhMoc >= thoiGianHienTai;
                 });
@@ -221,7 +270,7 @@
                 document.getElementById('loadingStatus').style.display = 'none';
                 hienThiChuyenXe(danhSachChuyenGoc);
             } catch (error) {
-                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi đồng bộ dữ liệu cột từ Apps Script!</span>";
+                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi đồng bộ dữ liệu cột từ hệ thống!</span>";
                 console.error(error);
             }
         }
@@ -231,23 +280,31 @@
             listContainer.innerHTML = '';
 
             if (data.length === 0) {
-                listContainer.innerHTML = '<div class="no-result">Hiện tại không có chuyến xe nào phù hợp.</div>';
+                listContainer.innerHTML = '<div class="no-result">Hiện tại không có chuyến xe nào phù hợp hướng tìm kiếm.</div>';
                 return;
             }
 
             data.forEach(chuyen => {
                 let khungGhiChu = '';
                 if (chuyen.ghiChu && String(chuyen.ghiChu).trim() !== '') {
-                    khungGhiChu = `<div class="ghi-chu-box"><i class="fa-solid fa-comment-dots"></i> <b>Lộ trình / Ghi chú:</b> ${chuyen.ghiChu}</div>`;
+                    khungGhiChu = `<div class="ghi-chu-box"><i class="fa-solid fa-comment-dots"></i> <b>Lộ trình / Ghi chú bổ sung:</b> ${chuyen.ghiChu}</div>`;
                 }
+
+                // Xác định nhãn xe máy hay ô tô để hiện màu cho đẹp
+                let badgeClass = chuyen.loaiPhuongTien.includes("Ô tô") ? "badge-o-to" : "badge-xe-may";
+                let iconXe = chuyen.loaiPhuongTien.includes("Ô tô") ? "fa-car" : "fa-motorcycle";
 
                 const card = `
                     <div class="card">
-                        <div class="tuyen-duong"><i class="fa-solid fa-route"></i> ${chuyen.tuyenDuong || 'Chưa cập nhật'}</div>
+                        <div class="tuyen-duong-box">
+                            <div class="tuyen-duong"><i class="fa-solid fa-route"></i> ${chuyen.tuyenDuong || 'Chưa cập nhật'}</div>
+                            <span class="badge-loai-xe ${badgeClass}"><i class="fa-solid ${iconXe}"></i> ${chuyen.loaiPhuongTien}</span>
+                        </div>
+                        
                         <div class="info-row"><i class="fa-solid fa-clock"></i> <b>Khởi hành:</b> &nbsp;<span style="color:#0056b3; font-weight:bold;">${chuyen.thoiGianKhoiHanh}</span></div>
                         <div class="info-row"><i class="fa-solid fa-bullhorn"></i> <b>Đăng lúc:</b> &nbsp;<span style="color:#666; font-style: italic;">${chuyen.thoiGianDang}</span></div>
-                        <div class="info-row"><i class="fa-solid fa-user"></i> <b>Tài xe:</b> &nbsp;${chuyen.tenTaiXe || 'Ẩn danh'}</div>
-                        <div class="info-row"><i class="fa-solid fa-car"></i> <b>Chi tiết xe:</b> &nbsp;${chuyen.loaiPhuongTien || 'Chưa rõ'} - ${chuyen.chiTietXe || 'Không có'}</div>
+                        <div class="info-row"><i class="fa-solid fa-user"></i> <b>Tài xế:</b> &nbsp;${chuyen.tenTaiXe || 'Ẩn danh'}</div>
+                        <div class="info-row"><i class="fa-solid fa-circle-info"></i> <b>Chi tiết xe:</b> &nbsp;${chuyen.chiTietXe || 'Không có thông tin'}</div>
                         <div class="info-row"><i class="fa-solid fa-id-card"></i> <b>Biển số xe:</b> &nbsp;${chuyen.bienSoXe || 'Chưa rõ'}</div>
                         
                         <div class="gia-ve-box">${chuyen.giaVe}</div>
@@ -260,20 +317,39 @@
             });
         }
 
-        function locChuyenXeDoiLuu() {
+        // Hàm xử lý lọc tổng hợp (Kết hợp cả Ô tìm kiếm địa danh và Nút bấm chọn loại xe)
+        function locChuyenXeTổngHop() {
             const tuKhoa = document.getElementById('searchInput').value.toLowerCase().trim();
-            if (!tuKhoa) {
-                hienThiChuyenXe(danhSachChuyenGoc);
-                return;
-            }
-
+            
             const ketQuaLoc = danhSachChuyenGoc.filter(chuyen => {
+                // 1. Kiểm tra loại xe có khớp nút bấm đang chọn không
+                if (loaiXeDuocChon !== "TatCa" && chuyen.loaiPhuongTien !== loaiXeDuocChon) {
+                    return false;
+                }
+                
+                // 2. Kiểm tra từ khóa địa danh khách gõ vào
                 const tuyenText = (chuyen.tuyenDuong || '').toLowerCase();
                 const ghiChuText = (chuyen.ghiChu || '').toLowerCase();
                 return tuyenText.includes(tuKhoa) || ghiChuText.includes(tuKhoa);
             });
 
             hienThiChuyenXe(ketQuaLoc);
+        }
+
+        // Hàm xử lý sự kiện khi bấm nút chuyển đổi Ô tô / Xe máy trên giao diện web
+        function thayDoiBoLocLoaiXe(loaiXe) {
+            loaiXeDuocChon = loaiXe;
+            
+            // Đổi màu nút bấm được kích hoạt
+            document.getElementById('btnAll').classList.remove('active');
+            document.getElementById('btnOto').classList.remove('active');
+            document.getElementById('btnXeMay').classList.remove('active');
+            
+            if (loaiXe === 'TatCa') document.getElementById('btnAll').classList.add('active');
+            else if (loaiXe === 'Ô tô') document.getElementById('btnOto').classList.add('active');
+            else if (loaiXe === 'Xe máy') document.getElementById('btnXeMay').classList.add('active');
+            
+            locChuyenXeTổngHop();
         }
 
         taiDuLieu();
