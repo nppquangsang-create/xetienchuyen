@@ -52,7 +52,7 @@
             border: none;
             outline: none;
             width: 100%;
-            font-size: 15px;
+            font-size: 13.5px; /* Tối ưu cỡ chữ vừa vặn để hiển thị câu hướng dẫn dài trên di động */
         }
         .loading {
             text-align: center;
@@ -132,7 +132,8 @@
     <div class="container">
         <div class="search-box">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <input type="text" id="searchInput" oninput="timKiemChuyen()" placeholder="Nhập Nơi đi, Nơi đến, Tên tài xế (VD: Cần Thơ, Sang)...">
+            <!-- CẬP NHẬT CHÍNH XÁC DÒNG HƯỚNG DẪN DƯỚI ĐÂY -->
+            <input type="text" id="searchInput" oninput="timKiemChuyen()" placeholder="Nhập Phường/Xã, Quận/Huyện, Tỉnh/TP (Ví dụ: Long Mỹ, TP Cần Thơ, phường Sài Gòn, TP Hồ Chí Minh...)">
         </div>
 
         <div id="loadingStatus" class="loading">
@@ -143,44 +144,32 @@
     </div>
 
     <script>
-        // THAY ĐƯỜNG LINK WEB APP GOOGLE SCRIPT CỦA ANH VÀO ĐÂY
         const URL_API = "https://script.google.com/macros/s/AKfycbzMeFj4A2E8b9It8kCmuDZV-t24SIqXCbHOpJ5VrvuVCallSjgw-PG6-VXprnPa-pfU/exec";
         
         let danhSachChuyen = [];
 
-        // Hàm xử lý định dạng hiển thị ngày tháng / chuỗi chữ text thân thiện
-        function dinhDangHienThi(chuoiGoc) {
-            if (!chuoiGoc) return 'Chưa cập nhật';
-            if (chuoiGoc instanceof Date || !isNaN(Date.parse(chuoiGoc))) {
-                const d = new Date(chuoiGoc);
-                if (!isNaN(d.getTime())) {
-                    const ngay = String(d.getDate()).padStart(2, '0');
-                    const thang = String(d.getMonth() + 1).padStart(2, '0');
-                    const nam = d.getFullYear();
-                    return `${ngay}/${thang}/${nam}`;
-                }
-            }
-            // Nếu là chuỗi text sẵn (VD: 25/05/2026) thì giữ nguyên hiển thị
-            return String(chuoiGoc).trim();
-        }
-
-        // Hàm chuyển đổi dữ liệu Ngày Khởi Hành sang đối tượng Ngày để so sánh ẩn chuyến cũ
-        function layNgaySoSanh(chuoiNgay) {
-            if (!chuoiNgay) return null;
-            
-            // Nếu hệ thống tự parse được thành Date luôn
-            const d Direct = new Date(chuoiNgay);
+        function parseDateString(str) {
+            if (!str) return null;
+            const dDirect = new Date(str);
             if (!isNaN(dDirect.getTime())) {
-                dDirect.setHours(23, 59, 59, 999); // Giữ hiển thị hết ngày đó
                 return dDirect;
             }
-
-            // Trường hợp chuỗi text thủ công dạng DD/MM/YYYY (VD: 25/05/2026)
-            const match = String(chuoiNgay).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            const match = String(str).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
             if (match) {
-                return new Date(match[3], match[2] - 1, match[1], 23, 59, 59);
+                return new Date(match[3], match[2] - 1, match[1]);
             }
             return null;
+        }
+
+        function dinhDangHienThi(chuoiGoc) {
+            if (!chuoiGoc) return 'Chưa cập nhật';
+            const d = parseDateString(chuoiGoc);
+            if (!d) return String(chuoiGoc).trim();
+            
+            const ngay = String(d.getDate()).padStart(2, '0');
+            const thang = String(d.getMonth() + 1).padStart(2, '0');
+            const nam = d.getFullYear();
+            return `${ngay}/${thang}/${nam}`;
         }
 
         async function taiDuLieu() {
@@ -188,18 +177,15 @@
                 const response = await fetch(URL_API);
                 const rawData = await response.json();
                 
-                // Đặt mốc thời gian hôm nay (bỏ phần giờ phút giây để chỉ so sánh ngày)
                 const homNay = new Date();
                 homNay.setHours(0, 0, 0, 0);
                 
                 const danhSachThoatLoc = rawData.map(item => {
-                    // Tự động xử lý thêm số 0 ở đầu số điện thoại nếu bị thiếu
                     let sdtChuan = String(item.soDienThoai || '').trim();
                     if (sdtChuan && !sdtChuan.startsWith('0') && !sdtChuan.startsWith('+')) {
                         sdtChuan = '0' + sdtChuan;
                     }
 
-                    // Tự động định dạng hiển thị giá tiền cho đẹp mắt
                     let giaGoc = item.giaDuKien;
                     let giaHienThi = giaGoc;
                     if (giaGoc && !isNaN(giaGoc)) {
@@ -222,12 +208,10 @@
                     };
                 });
 
-                // TỰ ĐỘNG LỌC: Ẩn các chuyến xe đã chạy từ những ngày trước
                 danhSachChuyen = danhSachThoatLoc.filter(chuyen => {
-                    // Nếu ngày khởi hành >= ngày hôm nay thì giữ lại hiển thị lên web
-                    const ngayDi = layNgaySoSanh(item => item.thoiGianKhoiHanh ? item.thoiGianKhoiHanh : chuyen.thoiGianKhoiHanh);
-                    const thoiGianCheck = layNgaySoSanh(chuyen.thoiGianKhoiHanh);
-                    if (!thoiGianCheck) return true; // Nếu tài xế nhập chữ tự do thì vẫn cho hiện bài
+                    const thoiGianCheck = parseDateString(chuyen.thoiGianKhoiHanh);
+                    if (!thoiGianCheck) return true;
+                    thoiGianCheck.setHours(23, 59, 59);
                     return thoiGianCheck >= homNay;
                 });
 
@@ -281,10 +265,7 @@
 
             const ketQuaLoc = danhSachChuyen.filter(chuyen => {
                 const tuyen = (chuyen.tuyenDuong || '').toLowerCase();
-                const taiXe = (chuyen.tenTaiXe || '').toLowerCase();
-                const loaiXe = (chuyen.loaiPhuongTien || '').toLowerCase();
-                const bienSo = (chuyen.bienSoXe || '').toLowerCase();
-                return tuyen.includes(tuKhoa) || taiXe.includes(tuKhoa) || loaiXe.includes(tuKhoa) || bienSo.includes(tuKhoa);
+                return tuyen.includes(tuKhoa);
             });
 
             hienThiChuyenXe(ketQuaLoc);
