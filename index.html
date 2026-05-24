@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Xe Tiện Chuyến Miễn Phí</title>
+    <title>Hệ Thống Xe Tiện Chuyến Thông Minh</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
@@ -44,7 +44,7 @@
             align-items: center;
         }
         .search-box i {
-            color: #888;
+            color: #0288d1;
             margin-right: 10px;
             font-size: 18px;
         }
@@ -52,7 +52,7 @@
             border: none;
             outline: none;
             width: 100%;
-            font-size: 13.5px;
+            font-size: 14px;
         }
         .loading {
             text-align: center;
@@ -72,7 +72,7 @@
             border-left: 5px solid #0288d1;
         }
         .tuyen-duong {
-            font-size: 18px;
+            font-size: 17px;
             font-weight: bold;
             color: #0056b3;
             margin-bottom: 10px;
@@ -126,18 +126,17 @@
 
     <div class="header">
         <h1>HỆ THỐNG XE TIỆN CHUYẾN</h1>
-        <p>Tìm kiếm chuyến đi tiết kiệm, nhanh chóng</p>
+        <p>Tìm tuyến xe đổ về hoặc chạy qua khu vực của bạn</p>
     </div>
 
     <div class="container">
         <div class="search-box">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <!-- ĐÃ TINH CHỈNH ĐỂ KHÔNG BỊ TRÀN CHỮ MẤT CHỮ TRÊN MÀN HÌNH -->
-            <input type="text" id="searchInput" oninput="timKiemChuyen()" placeholder="Nhập Phường/Xã, Quận/Huyện, Tỉnh/TP (Ví dụ: Long Mỹ, TP Cần Thơ, P. Sài Gòn, TP HCM...)">
+            <input type="text" id="searchInput" oninput="locChuyenXeDoiLuu()" placeholder="Nhập tên Phường/Xã, Quận/Huyện, Tỉnh/TP để tìm xe...">
         </div>
 
         <div id="loadingStatus" class="loading">
-            <i class="fa-solid fa-spinner fa-spin"></i> Đang tải danh sách chuyến xe...
+            <i class="fa-solid fa-spinner fa-spin"></i> Đang kết nối danh sách tài xế...
         </div>
 
         <div id="chuyenXeList" class="chuyen-xe-list"></div>
@@ -146,30 +145,60 @@
     <script>
         const URL_API = "https://script.google.com/macros/s/AKfycbzMeFj4A2E8b9It8kCmuDZV-t24SIqXCbHOpJ5VrvuVCallSjgw-PG6-VXprnPa-pfU/exec";
         
-        let danhSachChuyen = [];
+        let danhSachChuyenGoc = [];
 
-        function parseDateString(str) {
-            if (!str) return null;
-            const dDirect = new Date(str);
-            if (!isNaN(dDirect.getTime())) {
-                return dDirect;
+        // Hàm xử lý định dạng Ngày/Tháng/Năm kèm Giờ:Phút từ Google Sheets đổ về
+        function parseFullDateTime(dateStr, timeStr) {
+            if (!dateStr) return null;
+            let combinedDate = new Date(dateStr);
+            
+            // Nếu không đọc được trực tiếp, thử cắt chuỗi định dạng dd/mm/yyyy
+            if (isNaN(combinedDate.getTime())) {
+                const match = String(dateStr).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+                if (match) {
+                    combinedDate = new Date(match[3], match[2] - 1, match[1]);
+                } else {
+                    return null;
+                }
             }
-            const match = String(str).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-            if (match) {
-                return new Date(match[3], match[2] - 1, match[1]);
+
+            // Nếu tài xế có nhập Giờ chạy riêng biệt (Ví dụ: "09:00" hoặc "15:30")
+            if (timeStr && String(timeStr).trim() !== '') {
+                const timeMatch = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})/);
+                if (timeMatch) {
+                    combinedDate.setHours(parseInt(timeMatch[1]), parseInt(timeMatch[2]), 0, 0);
+                    return combinedDate;
+                }
             }
-            return null;
+            
+            // Nếu không có giờ cụ thể, mặc định đặt cuối ngày để không bị ẩn sớm quá
+            combinedDate.setHours(23, 59, 59, 999);
+            return combinedDate;
         }
 
-        function dinhDangHienThi(chuoiGoc) {
-            if (!chuoiGoc) return 'Chưa cập nhật';
-            const d = parseDateString(chuoiGoc);
-            if (!d) return String(chuoiGoc).trim();
+        // Hàm hiển thị thời gian đăng bài đẹp mắt (Có cả Giờ:Phút)
+        function dinhDangThoiGianDang(chuoiGoc) {
+            if (!chuoiGoc) return 'Vừa xong';
+            const d = new Date(chuoiGoc);
+            if (isNaN(d.getTime())) return String(chuoiGoc).trim();
             
+            const gio = String(d.getHours()).padStart(2, '0');
+            const phut = String(d.getMinutes()).padStart(2, '0');
             const ngay = String(d.getDate()).padStart(2, '0');
             const thang = String(d.getMonth() + 1).padStart(2, '0');
             const nam = d.getFullYear();
-            return `${ngay}/${thang}/${nam}`;
+            return `${gio}:${phut} - ${ngay}/${thang}/${nam}`;
+        }
+
+        function dinhDangNgayChay(chuoiGoc) {
+            if (!chuoiGoc) return 'Chưa cập nhật';
+            const d = new Date(chuoiGoc);
+            if (isNaN(d.getTime())) {
+                const match = String(chuoiGoc).trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+                if (match) return `${match[1].padStart(2,'0')}/${match[2].padStart(2,'0')}/${match[3]}`;
+                return String(chuoiGoc).trim();
+            }
+            return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
         }
 
         async function taiDuLieu() {
@@ -177,10 +206,9 @@
                 const response = await fetch(URL_API);
                 const rawData = await response.json();
                 
-                const homNay = new Date();
-                homNay.setHours(0, 0, 0, 0);
+                const thoiGianHienTai = new Date(); // Lấy đồng hồ thực tế hiện tại
                 
-                const danhSachThoatLoc = rawData.map(item => {
+                const danhSachXuLy = rawData.map(item => {
                     let sdtChuan = String(item.soDienThoai || '').trim();
                     if (sdtChuan && !sdtChuan.startsWith('0') && !sdtChuan.startsWith('+')) {
                         sdtChuan = '0' + sdtChuan;
@@ -195,8 +223,8 @@
                     }
 
                     return {
-                        thoiGianDang: dinhDangHienThi(item.thoiGianDangChuyen),
-                        thoiGianKhoiHanh: dinhDangHienThi(item.thoiGianKhoiHanh),
+                        thoiGianDang: dinhDangThoiGianDang(item.thoiGianDangChuyen), // Hiện Giờ:Phút lúc đăng
+                        thoiGianKhoiHanhHienThi: dinhDangNgayChay(item.thoiGianKhoiHanh),
                         tuyenDuong: item.tuyenDuong,
                         loaiPhuongTien: item.loaiPhuongTien,
                         bienSoXe: item.bienSoXe,
@@ -204,21 +232,22 @@
                         sdt: sdtChuan,
                         chiTietXe: item.chiTietXe,
                         giaVe: giaHienThi,
-                        ghiChu: item.ghiChu
+                        ghiChu: item.ghiChu,
+                        // Lưu mốc thời gian để hệ thống đo đếm tự ẩn bài
+                        thoiGianKhoiHanhMoc: parseFullDateTime(item.thoiGianKhoiHanh, item.gioKhoiHanh || '') 
                     };
                 });
 
-                danhSachChuyen = danhSachThoatLoc.filter(chuyen => {
-                    const thoiGianCheck = parseDateString(chuyen.thoiGianKhoiHanh);
-                    if (!thoiGianCheck) return true;
-                    thoiGianCheck.setHours(23, 59, 59);
-                    return thoiGianCheck >= homNay;
+                // CƠ CHẾ TỰ ĐỘNG ẨN BÀI: Nếu thời gian xe chạy nhỏ hơn thời gian hiện tại -> Tự biến mất
+                danhSachChuyenGoc = danhSachXuLy.filter(chuyen => {
+                    if (!chuyen.thoiGianKhoiHanhMoc) return true; // Nếu lỗi dữ liệu ngày, giữ lại kiểm tra
+                    return chuyen.thoiGianKhoiHanhMoc >= thoiGianHienTai;
                 });
 
                 document.getElementById('loadingStatus').style.display = 'none';
-                hienThiChuyenXe(danhSachChuyen);
+                hienThiChuyenXe(danhSachChuyenGoc);
             } catch (error) {
-                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi tải dữ liệu. Vui lòng kiểm tra lại cấu trúc nâng cấp Apps Script!</span>";
+                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi đồng bộ dữ liệu xe từ Apps Script!</span>";
                 console.error(error);
             }
         }
@@ -228,44 +257,47 @@
             listContainer.innerHTML = '';
 
             if (data.length === 0) {
-                listContainer.innerHTML = '<div class="no-result">Hiện tại không có chuyến xe nào sắp chạy.</div>';
+                listContainer.innerHTML = '<div class="no-result">Hiện tại không có chuyến xe nào hướng về khu vực này.</div>';
                 return;
             }
 
             data.forEach(chuyen => {
                 let khungGhiChu = '';
                 if (chuyen.ghiChu && String(chuyen.ghiChu).trim() !== '') {
-                    khungGhiChu = `<div class="ghi-chu-box"><i class="fa-solid fa-comment-dots"></i> <b>Giờ chạy/Ghi chú:</b> ${chuyen.ghiChu}</div>`;
+                    khungGhiChu = `<div class="ghi-chu-box"><i class="fa-solid fa-clock"></i> <b>Giờ chạy / Lưu ý:</b> ${chuyen.ghiChu}</div>`;
                 }
 
                 const card = `
                     <div class="card">
                         <div class="tuyen-duong"><i class="fa-solid fa-route"></i> ${chuyen.tuyenDuong || 'Chưa cập nhật'}</div>
-                        <div class="info-row"><i class="fa-solid fa-calendar-days"></i> <b>Ngày chạy:</b> &nbsp;<span style="color:#0056b3; font-weight:bold;">${chuyen.thoiGianKhoiHanh}</span></div>
-                        <div class="info-row"><i class="fa-solid fa-pen-to-square"></i> <b>Đăng lúc:</b> &nbsp;${chuyen.thoiGianDang}</div>
+                        <div class="info-row"><i class="fa-solid fa-calendar-days"></i> <b>Ngày khởi hành:</b> &nbsp;<span style="color:#0056b3; font-weight:bold;">${chuyen.thoiGianKhoiHanhHienThi}</span></div>
+                        <div class="info-row"><i class="fa-solid fa-bullhorn"></i> <b>Đăng lúc:</b> &nbsp;<span style="color:#666; font-style: italic;">${chuyen.thoiGianDang}</span></div>
                         <div class="info-row"><i class="fa-solid fa-user"></i> <b>Tài xế:</b> &nbsp;${chuyen.tenTaiXe || 'Ẩn danh'}</div>
-                        <div class="info-row"><i class="fa-solid fa-car"></i> <b>Loại phương tiện:</b> &nbsp;${chuyen.loaiPhuongTien || 'Chưa rõ'}</div>
-                        <div class="info-row"><i class="fa-solid fa-circle-info"></i> <b>Chi tiết xe:</b> &nbsp;${chuyen.chiTietXe || 'Chưa rõ'}</div>
-                        <div class="info-row"><i class="fa-solid fa-id-card"></i> <b>Biển số xe:</b> &nbsp;${chuyen.bienSoXe || 'Chưa rõ'}</div>
+                        <div class="info-row"><i class="fa-solid fa-car"></i> <b>Loại xe:</b> &nbsp;${chuyen.loaiPhuongTien || 'Chưa rõ'} (${chuyen.chiTietXe || 'Không có'})</div>
+                        <div class="info-row"><i class="fa-solid fa-id-card"></i> <b>Biển số:</b> &nbsp;${chuyen.bienSoXe || 'Chưa rõ'}</div>
                         <div class="info-row"><i class="fa-solid fa-money-bill-wave"></i> <b>Giá dự kiến:</b> &nbsp;<span style="color:#d32f2f; font-weight:bold;">${chuyen.giaVe}</span></div>
                         ${khungGhiChu}
-                        <a href="tel:${chuyen.sdt}" class="btn-call"><i class="fa-solid fa-phone"></i> Gọi Tài Xế: ${chuyen.sdt}</a>
+                        <a href="tel:${chuyen.sdt}" class="btn-call"><i class="fa-solid fa-phone"></i> Gọi Tài Xế Để Ghép Chuyến: ${chuyen.sdt}</a>
                     </div>
                 `;
                 listContainer.insertAdjacentHTML('beforeend', card);
             });
         }
 
-        function timKiemChuyen() {
+        // CƠ CHẾ LỌC ĐA ĐIỂM: Khách gõ địa danh nào, tìm mọi tuyến đường có chứa địa danh đổ về đó
+        function locChuyenXeDoiLuu() {
             const tuKhoa = document.getElementById('searchInput').value.toLowerCase().trim();
             if (!tuKhoa) {
-                hienThiChuyenXe(danhSachChuyen);
+                hienThiChuyenXe(danhSachChuyenGoc);
                 return;
             }
 
-            const ketQuaLoc = danhSachChuyen.filter(chuyen => {
-                const tuyen = (chuyen.tuyenDuong || '').toLowerCase();
-                return tuyen.includes(tuKhoa);
+            const ketQuaLoc = danhSachChuyenGoc.filter(chuyen => {
+                const tuyenText = (chuyen.tuyenDuong || '').toLowerCase();
+                const ghiChuText = (chuyen.ghiChu || '').toLowerCase();
+                
+                // Khớp từ khóa khách gõ với lộ trình tài xế đăng đăng
+                return tuyenText.includes(tuKhoa) || ghiChuText.includes(tuKhoa);
             });
 
             hienThiChuyenXe(ketQuaLoc);
