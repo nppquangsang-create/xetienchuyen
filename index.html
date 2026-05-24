@@ -69,35 +69,47 @@
             padding: 15px;
             margin-bottom: 15px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            border-left: 5px solid #28a745;
+            border-left: 5px solid #0288d1;
         }
         .tuyen-duong {
             font-size: 18px;
             font-weight: bold;
             color: #0056b3;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
+            border-bottom: 1px dashed #eee;
+            padding-bottom: 5px;
         }
         .info-row {
             display: flex;
-            margin-bottom: 5px;
+            margin-bottom: 6px;
             font-size: 14px;
             align-items: center;
         }
         .info-row i {
             width: 20px;
-            color: #666;
+            color: #0288d1;
             margin-right: 8px;
+        }
+        .ghi-chu-box {
+            background-color: #fff9db;
+            border-left: 3px solid #f59f00;
+            padding: 8px;
+            margin-top: 10px;
+            font-size: 13.5px;
+            border-radius: 4px;
+            color: #665c00;
         }
         .btn-call {
             display: block;
             background-color: #28a745;
             color: white;
             text-align: center;
-            padding: 10px;
+            padding: 11px;
             border-radius: 5px;
             text-decoration: none;
             font-weight: bold;
             margin-top: 12px;
+            font-size: 15px;
             transition: 0.3s;
         }
         .btn-call:hover {
@@ -120,8 +132,7 @@
     <div class="container">
         <div class="search-box">
             <i class="fa-solid fa-magnifying-glass"></i>
-            <!-- Đã cập nhật bỏ chữ Quận/Huyện đúng theo thực tế thay đổi địa giới của anh -->
-            <input type="text" id="searchInput" oninput="timKiemChuyen()" placeholder="Nhập Phường/Xã, Tỉnh/TP, Tên tài xế (VD: Long Bình, Cần Thơ)...">
+            <input type="text" id="searchInput" oninput="timKiemChuyen()" placeholder="Nhập Nơi đi, Nơi đến, Tên tài xế (VD: Cần Thơ, Sang)...">
         </div>
 
         <div id="loadingStatus" class="loading">
@@ -132,30 +143,87 @@
     </div>
 
     <script>
+        // Đường link API từ Google Apps Script của anh
         const URL_API = "https://script.google.com/macros/s/AKfycbzMeFj4A2E8b9It8kCmuDZV-t24SIqXCbHOpJ5VrvuVCallSjgw-PG6-VXprnPa-pfU/exec";
         
         let danhSachChuyen = [];
 
-        async function taiDuLieu() {
+        // Hàm kiểm tra để tự động ẩn chuyến xe khi đã quá giờ khởi hành (Cột B)
+        function parseDateString(str) {
+            if (!str) return null;
+            // Hỗ trợ định dạng "HH:mm DD/MM/YYYY" hoặc hệ thống ngày giờ tiêu chuẩn từ Google Sheets
+            const match = str.trim().match(/^(\d{1,2}):(\d{1,2})\s+(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (!match) {
+                // Nếu Google Sheets trả về dạng Date tiêu chuẩn ISO hoặc định dạng khác
+                const d = new Date(str);
+                return isNaN(d.getTime()) ? null : d;
+            }
+            return new Date(match[5], match[4] - 1, match[3], match[1], match[2]);
+        }
+
+        // Định dạng hiển thị ngày giờ thân thiện cho người dùng xem trên web
+        function dinhDangNgayGio(chuoiGoc) {
+            if (!chuoiGoc) return 'Chưa xác định';
+            const d = parseDateString(chuoiGoc);
+            if (!d) return chuoiGoc; // Nếu không parse được thì hiện chữ gốc
+            
+            const gio = String(d.getHours()).padStart(2, '0');
+            const phut = String(d.getMinutes()).padStart(2, '0');
+            const ngay = String(d.getDate()).padStart(2, '0');
+            const thang = String(d.getMonth() + 1).padStart(2, '0');
+            const nam = d.getFullYear();
+            
+            return `${gio}:${phut} ngày ${ngay}/${thang}/${nam}`;
+        }
+
+        async function taiDu Lieu() {
             try {
                 const response = await fetch(URL_API);
                 const rawData = await response.json();
+                const bayGio = new Date();
                 
-                danhSachChuyen = rawData.map(item => ({
-                    thoiGian: item.thoiGian,                    
-                    tuyenDuong: item.tuyenDuong,                
-                    loaiPhuongTien: item.tenTaiXe,              
-                    tenTaiXe: item.sdt,                         
-                    sdt: item.loaiXe,                           
-                    chiTietXe: item.giaVe,                      
-                    giaVe: item.ghiChu,                         
-                    ghiChu: item.chiTietXe                      
-                }));
+                // Áp dụng bốc dữ liệu theo đúng chuẩn bảng mới (Cột A đến J)
+                const danhSachThoatLoc = rawData.map(item => {
+                    // Sửa lỗi tự động thêm số 0 cho số điện thoại ở Cột G
+                    let sdtChuan = String(item.soDienThoai || item.sdt || '').trim();
+                    if (sdtChuan && !sdtChuan.startsWith('0') && !sdtChuan.startsWith('+')) {
+                        sdtChuan = '0' + sdtChuan;
+                    }
+
+                    // Sửa lỗi hiển thị đẹp cho giá tiền ở Cột I
+                    let giaGoc = item.giaDuKien || item.giaVe;
+                    let giaHienThi = giaGoc;
+                    if (giaGoc && !isNaN(giaGoc)) {
+                        giaHienThi = Number(giaGoc).toLocaleString('vi-VN') + " vnđ";
+                    } else if (!giaGoc) {
+                        giaHienThi = "Thỏa thuận";
+                    }
+
+                    return {
+                        thoiGianDang: item.thoiGianDangChuyen || item.thoiGianDang || 'Vừa xong', // Cột A
+                        thoiGianKhoiHanh: item.thoiGianKhoiHanh || item.thoiGian,               // Cột B
+                        tuyenDuong: item.tuyenDuong,                                           // Cột C
+                        loaiPhuongTien: item.loaiPhuongTien,                                   // Cột D
+                        bienSoXe: item.bienSoXe || item.chiTietXe,                             // Cột E
+                        tenTaiXe: item.tenTaiXe,                                               // Cột F
+                        sdt: sdtChuan,                                                         // Cột G
+                        chiTietXe: item.chiTietXe || item.chiTiet,                             // Cột H
+                        giaVe: giaHienThi,                                                     // Cột I
+                        ghiChu: item.ghiChu                                                    // Cột J
+                    };
+                });
+
+                // LỌC TỰ ĐỘNG: Ẩn chuyến đã đi, chỉ giữ lại chuyến sắp đi (Cột B >= Hiện tại)
+                danhSachChuyen = danhSachThoatLoc.filter(chuyen => {
+                    const thoiGianDi = parseDateString(chuyen.thoiGianKhoiHanh);
+                    if (!thoiGianDi) return true; // Nếu tài xế nhập chữ không đúng chuẩn ngày giờ thì cứ hiện lên
+                    return thoiGianDi >= bayGio;  // Chỉ lấy chuyến có thời gian khởi hành lớn hơn hoặc bằng hiện tại
+                });
 
                 document.getElementById('loadingStatus').style.display = 'none';
                 hienThiChuyenXe(danhSachChuyen);
             } catch (error) {
-                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi tải dữ liệu.</span>";
+                document.getElementById('loadingStatus').innerHTML = "<span style='color:red;'>Lỗi kết nối dữ liệu Trang tính mới.</span>";
                 console.error(error);
             }
         }
@@ -165,20 +233,27 @@
             listContainer.innerHTML = '';
 
             if (data.length === 0) {
-                listContainer.innerHTML = '<div class="no-result">Không tìm thấy chuyến xe nào phù hợp.</div>';
+                listContainer.innerHTML = '<div class="no-result">Hiện không có chuyến xe nào sắp khởi hành.</div>';
                 return;
             }
 
             data.forEach(chuyen => {
+                let khungGhiChu = '';
+                if (chuyen.ghiChu && String(chuyen.ghiChu).trim() !== '') {
+                    khungGhiChu = `<div class="ghi-chu-box"><i class="fa-solid fa-comment-dots"></i> <b>Ghi chú:</b> ${chuyen.ghiChu}</div>`;
+                }
+
                 const card = `
                     <div class="card">
                         <div class="tuyen-duong"><i class="fa-solid fa-route"></i> ${chuyen.tuyenDuong || 'Chưa cập nhật'}</div>
-                        <div class="info-row"><i class="fa-solid fa-clock"></i> <b>Khởi hành:</b> &nbsp;${chuyen.thoiGian || 'Chưa rõ'}</div>
+                        <div class="info-row"><i class="fa-solid fa-clock"></i> <b>Khởi hành:</b> &nbsp;<span style="color:#0056b3; font-weight:500;">${dinhDangNgayGio(chuyen.thoiGianKhoiHanh)}</span></div>
+                        <div class="info-row"><i class="fa-solid fa-pen-to-square"></i> <b>Đăng lúc:</b> &nbsp;${dinhDangNgayGio(chuyen.thoiGianDang)}</div>
                         <div class="info-row"><i class="fa-solid fa-user"></i> <b>Tài xế:</b> &nbsp;${chuyen.tenTaiXe || 'Ẩn danh'}</div>
-                        <div class="info-row"><i class="fa-solid fa-car"></i> <b>Loại xe:</b> &nbsp;${chuyen.loaiPhuongTien || 'Chưa rõ'}</div>
-                        <div class="info-row"><i class="fa-solid fa-id-card"></i> <b>Chi tiết/Biển số:</b> &nbsp;${chuyen.chiTietXe || 'Chưa rõ'}</div>
-                        <div class="info-row"><i class="fa-solid fa-money-bill-wave"></i> <b>Giá dự kiến:</b> &nbsp;<span style="color:#d32f2f; font-weight:bold;">${chuyen.giaVe || 'Thỏa thuận'}</span></div>
-                        <a href="tel:${chuyen.sdt}" class="btn-call"><i class="fa-solid fa-phone"></i> Gọi Ngay: ${chuyen.sdt || 'Không có số'}</a>
+                        <div class="info-row"><i class="fa-solid fa-car"></i> <b>Loại xe:</b> &nbsp;${chuyen.loaiPhuongTien || 'Chưa rõ'} (${chuyen.chiTietXe || 'N/A'})</div>
+                        <div class="info-row"><i class="fa-solid fa-id-card"></i> <b>Biển số xe:</b> &nbsp;${chuyen.bienSoXe || 'Chưa cập nhật'}</div>
+                        <div class="info-row"><i class="fa-solid fa-money-bill-wave"></i> <b>Giá dự kiến:</b> &nbsp;<span style="color:#d32f2f; font-weight:bold;">${chuyen.giaVe}</span></div>
+                        ${khungGhiChu}
+                        <a href="tel:${chuyen.sdt}" class="btn-call"><i class="fa-solid fa-phone"></i> Gọi Tài Xế: ${chuyen.sdt}</a>
                     </div>
                 `;
                 listContainer.insertAdjacentHTML('beforeend', card);
@@ -196,7 +271,8 @@
                 const tuyen = (chuyen.tuyenDuong || '').toLowerCase();
                 const taiXe = (chuyen.tenTaiXe || '').toLowerCase();
                 const loaiXe = (chuyen.loaiPhuongTien || '').toLowerCase();
-                return tuyen.includes(tuKhoa) || taiXe.includes(tuKhoa) || loaiXe.includes(tuKhoa);
+                const bienSo = (chuyen.bienSoXe || '').toLowerCase();
+                return tuyen.includes(tuKhoa) || taiXe.includes(tuKhoa) || loaiXe.includes(tuKhoa) || bienSo.includes(tuKhoa);
             });
 
             hienThiChuyenXe(ketQuaLoc);
